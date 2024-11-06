@@ -7,7 +7,7 @@
 #'
 #' @param data A data frame containing the pairs data and any covariates.
 #' @param pairs_cols A vector of column indices or names specifying the pairwise comparison columns in the data.
-#'                   If \code{NULL}, all columns are used.
+#'                   If \code{NULL}, all columns are assumed to be ranks or scores.
 #' @param form An optional formula specifying the covariates to include in the model. If \code{NULL}, then the
 #'             *intercept only* model will be fitted.
 #' @param mclass A character string specifying the Thurstone model class to fit. Currently, only "V" is implemented.
@@ -61,7 +61,7 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
   # define the regressions block of model code
   if(is.null(form)){
     reg_mod <- vector("character", length = m + 1)
-    reg_mod[1] <- paste0("i", K, " ~ 0 * 1")
+    reg_mod[1] <- paste0("i", K, " ~ 0 * 1 + mu", K, " * 1")
     counter <- 2
     for(j in 1:(K - 1)){
       for(k in (j + 1):K){
@@ -72,13 +72,23 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
     reg_mod <- paste(reg_mod, collapse = "\n")
   } else{
     X_names <- colnames(X)[-1]
-    reg_mod <- vector("character", length = K)
-    for(i in 1:(K-1)){
-      reg_mod[i] <- paste0("factor_", i, " ~ 1 + ", paste(X_names, collapse = " + "))
+    reg_mod <- vector("character", length = m + length(X_names) + 1)
+    reg_mod[1] <- paste0("i", K, " ~ 0 * 1 + mu", K, " * 1")
+    counter <- 2
+    for(j in 1:(K - 1)){
+      for(k in (j + 1):K){
+        intercept_jk <- paste0(indic[counter - 1], " ~ d", j, k, " * 1")
+        reg_jkl <- ""
+        for(l in 1:(ncol(X) - 1)){
+          reg_jkl <- paste0(reg_jkl, " + b", j, k, l, " * ", X_names[l])
+        }
+        reg_mod[counter] <- paste0(intercept_jk, reg_jkl)
+        counter <- counter + 1
+      }
     }
-    reg_mod[K] <- paste0("factor_", K, " ~ 0 * 1")
-    reg_mod <- paste(reg_mod, collapse = "\n")
   }
+  reg_mod <- paste(reg_mod, collapse = "\n")
+
 
   # define loadings block of model code
   meas <- vector("character", length = K)
@@ -99,16 +109,57 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
   covar <- paste(covar, collapse = "\n")
 
   # now create the derived portion of the model
-  derived <- vector("character", length = K)
-  for(i in 1:(K - 1)){
-    derived[i] <- paste0("mu", i, " := sqrt(2) * d", i, K)
+  if(is.null(form)){
+    derived <- vector("character", length = K)
+    for(i in 1:(K - 1)){
+      derived[i] <- paste0("mu", i, " := sqrt(2) * d", i, K)
+    }
+    derived[K] <- paste0("mu", K, " := 0")
+  } else{
+    # first, find which columns of X are factors
+    fctrs <- c(
+      1,
+      apply(as.matrix(X[,-1]), 2, function(x){!any(x != 1 & x != 0)}) |>
+        which() + 1
+    )
+    # now find unique combinations of those along with medians of the continuous
+    # variables
+    X_new <- X
+    # make some rownames to track things
+    rnames <- apply(
+      X_new[, fctrs],
+      1,
+      function(x, n = colnames(X_new[, fctrs])){
+        paste(rep(n, x), collapse = "_")
+      }
+    ) |> unique() |> gsub("[()]", "", x = _, perl = T)
+
+    if(any(!(1:ncol(X) %in% fctrs))){
+      contins <- which(!(1:ncol(X) %in% fctrs))
+      X_new[, contins] <- apply(as.matrix(X[, contins]), 2, median)
+    }
+    X_new <- unique(X_new)
+
+    # now construct derived variables
+    derived <- vector("character", length = (K - 1) * nrow(X_new))
+    for(i in 1:nrow(X_new)){
+      for(k in 1:(K - 1)){
+        intercept_ik <- paste0(
+          rnames[i], "_mu", k, " := sqrt(2) * (d", k, "4"
+        )
+        rhs_ik <- ""
+        for(l in 1:(ncol(X) - 1)){
+          rhs_ik <- paste0(rhs_ik, " + ", X_new[i, (l + 1)], " * b", k, "4", l)
+        }
+        rhs_ik <- paste0(rhs_ik, ")")
+        derived[(K-1)*(i - 1) + k] <- paste0(intercept_ik, rhs_ik)
+      }
+    }
   }
-  derived[K] <- paste0("mu", K, " := 0")
   derived <- paste(derived, collapse = "\n")
 
 
   P <- as.data.frame(P)
-  P[,1:K] <- apply(P[, 1:K], 2, ordered)
   if(is.null(form)){
     lav_dat <- P
   } else{
@@ -119,11 +170,11 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
   mfit <- lavaan::lavaan(
     model = c(reg_mod, meas, covar, derived),
     data = lav_dat,
-    ordered = colnames(P),
+    ordered = names(lav_dat)[1:ncol(P)],
     parameterization = "theta",
-    meanstructure = T,
-    orthogonal = T,
-    std.lv = T
+    meanstructure = TRUE,
+    orthogonal = TRUE,
+    std.lv = TRUE
   )
 
   ret <- list(
