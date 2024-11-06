@@ -58,47 +58,54 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
   # remove the initialization row
   A <- A[-1, ]
 
-  # define loadings block of model code
-  loadings <- vector("character", length = K)
-  for(i in 1:K){
-    rhs <- paste(A[,i], indic, sep = "*")
-    loadings[i] <- paste0("factor_", i, " =~ ", paste(rhs, collapse = " + "))
-  }
-  loadings <- paste(loadings, collapse = "\n")
-
-  # define latent model
+  # define the regressions block of model code
   if(is.null(form)){
-    lat_mod <- vector("character", length = K)
-    for(i in 1:(K-1)){
-      lat_mod[i] <- paste0("factor_", i, " ~ 1")
+    reg_mod <- vector("character", length = m + 1)
+    reg_mod[1] <- paste0("i", K, " ~ 0 * 1")
+    counter <- 2
+    for(j in 1:(K - 1)){
+      for(k in (j + 1):K){
+        reg_mod[counter] <- paste0(indic[counter - 1], " ~ d", j, k, " * 1")
+        counter <- counter + 1
+      }
     }
-    lat_mod[K] <- paste0("factor_", K, " ~ 0 * 1")
-    lat_mod <- paste(lat_mod, collapse = "\n")
+    reg_mod <- paste(reg_mod, collapse = "\n")
   } else{
     X_names <- colnames(X)[-1]
-    lat_mod <- vector("character", length = K)
+    reg_mod <- vector("character", length = K)
     for(i in 1:(K-1)){
-      lat_mod[i] <- paste0("factor_", i, " ~ 1 + ", paste(X_names, collapse = " + "))
+      reg_mod[i] <- paste0("factor_", i, " ~ 1 + ", paste(X_names, collapse = " + "))
     }
-    lat_mod[K] <- paste0("factor_", K, " ~ 0 * 1")
-    lat_mod <- paste(lat_mod, collapse = "\n")
+    reg_mod[K] <- paste0("factor_", K, " ~ 0 * 1")
+    reg_mod <- paste(reg_mod, collapse = "\n")
   }
 
+  # define loadings block of model code
+  meas <- vector("character", length = K)
+  for(i in 1:K){
+    rhs <- paste(A[,i], indic, sep = "*")
+    meas[i] <- paste0("i", i, " =~ ", paste(rhs, collapse = " + "))
+  }
+  meas <- paste(meas, collapse = "\n")
 
   # now fix factor variances and covariances
-  factor_var <- vector("character", length = (K * (K - 1) / 2))
-  counter <- 1
+  covar <- vector("character", length = K + m)
   for(i in 1:K){
-    for(j in i:K){
-      if(i == j){
-        factor_var[counter] <- paste0("factor_", i, " ~~ 1*factor_", j)
-      } else{
-        factor_var[counter] <- paste0("factor_", i, " ~~ 0*factor_", j)
-      }
-      counter <- counter + 1
-    }
+    covar[i] <- paste0("i", i, " ~~ 1 * i", i)
   }
-  factor_var <- paste(factor_var, collapse = "\n")
+  for(i in (K + 1):length(covar)){
+    covar[i] <- paste0(indic[i - K], " ~~ 2 * ", indic[i - K])
+  }
+  covar <- paste(covar, collapse = "\n")
+
+  # now create the derived portion of the model
+  derived <- vector("character", length = K)
+  for(i in 1:(K - 1)){
+    derived[i] <- paste0("mu", i, " := sqrt(2) * d", i, K)
+  }
+  derived[K] <- paste0("mu", K, " := 0")
+  derived <- paste(derived, collapse = "\n")
+
 
   P <- as.data.frame(P)
   P[,1:K] <- apply(P[, 1:K], 2, ordered)
@@ -110,45 +117,17 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
   }
   # fit the model
   mfit <- lavaan::lavaan(
-    model = c(loadings, lat_mod, factor_var),
+    model = c(reg_mod, meas, covar, derived),
     data = lav_dat,
-    int.lv.free = T,
     ordered = colnames(P),
     parameterization = "theta",
-    meanstructure = T
+    meanstructure = T,
+    orthogonal = T,
+    std.lv = T
   )
-
-  # p-values for each variable in X
-  coefs <- coef(mfit)
-  V <- mfit@vcov$vcov
-  L <- rep(0, length(coefs))
-  L[grep("~1", names(coefs))] <- 1
-  chisq_int <- as.double(
-    t(L * coefs) %*% solve(V) %*% (L * coefs)
-  )
-  df_pvals <- data.frame(
-    chisq = chisq_int,
-    df = sum(L),
-    p_val = 1 - stats::pchisq(chisq_int, sum(L))
-  )
-  if(!is.null(form)){
-    for(j in 2:ncol(X)){
-      L <- rep(0, length(coefs))
-      L[grep(colnames(X)[j], names(coefs))] <- 1
-      chisq <- as.double(
-        t(L * coefs) %*% solve(V) %*% (L * coefs)
-      )
-      df_pvals <- rbind(
-        df_pvals,
-        c(chisq, sum(L), 1 - stats::pchisq(chisq, sum(L)))
-      )
-    }
-  }
-  rownames(df_pvals) <- colnames(X)
 
   ret <- list(
     mfit = mfit,
-    df_pvals = df_pvals,
     mclass = mclass
   )
 

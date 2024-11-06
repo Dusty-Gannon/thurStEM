@@ -4,7 +4,7 @@
 \alias{ranks_as_pairs}
 \title{Convert Rankings to Pairwise Comparisons}
 \usage{
-ranks_as_pairs(R, cols = NULL, agg = F)
+ranks_as_pairs(R, cols = NULL, agg = F, scores = F)
 }
 \arguments{
 \item{R}{A matrix or data frame of rankings. Each row represents a set of rankings,
@@ -12,11 +12,15 @@ and each column represents an item being ranked. If R is a matrix,
 column names should be provided for the items.}
 
 \item{cols}{A vector of column indices specifying which columns provide the rankings.
-If NULL (default), all columns are included.}
+If \code{NULL} (default), all columns are included.}
 
 \item{agg}{A logical value indicating whether to aggregate the comparisons across
-all rows. If FALSE (default), the comparisons are provided for each
+all rows. If \code{FALSE} (default), the comparisons are provided for each
 individual row.}
+
+\item{scores}{If \code{FALSE} (default), the function assumes the data are as ranks such that
+a rank of 1 is considered most favored. If \code{TRUE}, then a 1 is considered
+least favorable since it got the lowest \emph{score}.}
 }
 \value{
 If \code{agg} is TRUE, the function returns a matrix where each element

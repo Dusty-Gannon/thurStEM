@@ -10,10 +10,13 @@
 #'          and each column represents an item being ranked. If R is a matrix,
 #'          column names should be provided for the items.
 #' @param cols A vector of column indices specifying which columns provide the rankings.
-#'             If NULL (default), all columns are included.
+#'             If \code{NULL} (default), all columns are included.
 #' @param agg A logical value indicating whether to aggregate the comparisons across
-#'            all rows. If FALSE (default), the comparisons are provided for each
+#'            all rows. If \code{FALSE} (default), the comparisons are provided for each
 #'            individual row.
+#' @param scores If \code{FALSE} (default), the function assumes the data are as ranks such that
+#'               a rank of 1 is considered most favored. If \code{TRUE}, then a 1 is considered
+#'               least favorable since it got the lowest \emph{score}.
 #'
 #' @return If \code{agg} is TRUE, the function returns a matrix where each element
 #'         \eqn{(i, j)} represents the number of times item \eqn{i} is ranked before
@@ -31,11 +34,11 @@
 #' ranks_as_pairs(R, agg = TRUE)
 #'
 #' @export
-ranks_as_pairs <- function(R, cols = NULL, agg = F){
+ranks_as_pairs <- function(R, cols = NULL, agg = F, scores = F){
   if(is.null(cols)){
     cols <- 1:ncol(R)
   }
-  m <- length(cols)
+  K <- length(cols)
   n <- nrow(R)
   items <- colnames(R)[cols]
   if(is.null(items)){
@@ -51,25 +54,33 @@ ranks_as_pairs <- function(R, cols = NULL, agg = F){
     }
     return(P)
   } else{
-    P <- matrix(data = 0, nrow = n, ncol = choose(m, 2))
-    pairnames <- vector(mode = "character")
-    indexes <- vector(mode = "list")
-    for(i in 1:(m - 1)){
-      for(j in (i + 1):m){
-        pairnames <- c(pairnames, paste(items[i], "before", items[j], sep = "_"))
-        indexes <- c(indexes, list(c(i, j)))
+    P <- matrix(data = 0, nrow = n, ncol = choose(K, 2))
+    pairnames <- vector(mode = "character", choose(K, 2))
+    indexes <- vector(mode = "list", choose(K, 2))
+    counter <- 1
+    for(i in 1:(K - 1)){
+      for(j in (i + 1):K){
+        pairnames[counter] <- paste0(items[i], items[j])
+        indexes[[counter]] <- c(i, j)
+        counter <- counter + 1
       }
     }
     colnames(P) <- pairnames
     R_sub <- R[, cols]
     for(i in 1:n){
-      for(j in 1:choose(m, 2)){
-        P[i, j] <- as.numeric(R_sub[i, indexes[[j]][1]] < R_sub[i, indexes[[j]][2]])
+      for(j in 1:choose(K, 2)){
+        if(isFALSE(scores)){
+          P[i, j] <- as.numeric(R_sub[i, indexes[[j]][1]] < R_sub[i, indexes[[j]][2]])
+        } else{
+          P[i, j] <- as.numeric(R_sub[i, indexes[[j]][1]] > R_sub[i, indexes[[j]][2]])
+        }
       }
     }
-    return(
-      as.data.frame(cbind(P, R[-cols]))
-    )
+    if(is.null(cols)){
+      return(as.data.frame(P))
+    } else{
+      return(as.data.frame(P, R[-cols]))
+    }
   }
 }
 
