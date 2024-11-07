@@ -60,33 +60,27 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
 
   # define the regressions block of model code
   if(is.null(form)){
-    reg_mod <- vector("character", length = m + 1)
-    reg_mod[1] <- paste0("i", K, " ~ 0 * 1 + mu", K, " * 1")
-    counter <- 2
-    for(j in 1:(K - 1)){
-      for(k in (j + 1):K){
-        reg_mod[counter] <- paste0(indic[counter - 1], " ~ d", j, k, " * 1")
-        counter <- counter + 1
-      }
+    reg_mod <- vector("character", length = K)
+    for(i in 1:(K-1)){
+      reg_mod[i] <- paste0("i", i, " ~ mu", i, " * 1")
     }
+    reg_mod[K] <- paste0("i", K, " ~ 0 * 1 + mu", K, " * 1")
     reg_mod <- paste(reg_mod, collapse = "\n")
   } else{
     X_names <- colnames(X)[-1]
-    reg_mod <- vector("character", length = m + length(X_names) + 1)
-    reg_mod[1] <- paste0("i", K, " ~ 0 * 1 + mu", K, " * 1")
-    counter <- 2
-    for(j in 1:(K - 1)){
-      for(k in (j + 1):K){
-        intercept_jk <- paste0(indic[counter - 1], " ~ d", j, k, " * 1")
-        reg_jkl <- ""
-        for(l in 1:(ncol(X) - 1)){
-          reg_jkl <- paste0(reg_jkl, " + b", j, k, l, " * ", X_names[l])
+    reg_mod <- vector("character", length = K + length(X_names))
+    counter <- 1
+    for(i in 1:(K - 1)){
+      intercept_i <- paste0("i", i, " ~ mu", i, " * 1")
+        reg_ij <- ""
+        for(j in 1:(ncol(X) - 1)){
+          reg_ij <- paste0(reg_ij, " + b", i, j, " * ", X_names[l])
         }
-        reg_mod[counter] <- paste0(intercept_jk, reg_jkl)
+        reg_mod[counter] <- paste0(intercept_i, reg_ij)
         counter <- counter + 1
       }
-    }
   }
+  ## NEEDS WORK!!!
   reg_mod <- paste(reg_mod, collapse = "\n")
 
 

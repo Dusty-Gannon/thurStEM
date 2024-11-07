@@ -49,18 +49,24 @@ pairs_dat2$grp <- factor(rep(1:2, each = surveys/2))
 test2 <- fit_rank_mod(pairs_dat2, pairs_cols = 1:6, form = ~ grp)
 summary(test2)
 
-pairs_dat2$grp <- ifelse(pairs_dat2$grp == 1, 0, 1)
+pairs_dat2$grp2 <- ifelse(pairs_dat2$grp == 1, 0, 1)
+pairs_dat2$grp3 <- rep(1:2, each = surveys/2)
 pairs_dat3 <- pairs_dat2
 pairs_dat3$grp <- factor(pairs_dat3$grp)
 
+
+# i1i2 ~ d12 * 1 + g12 * grp2
+# i1i3 ~ d13 * 1 + g13 * grp2
+# i1i4 ~ d14 * 1 + g14 * grp2
+# i2i3 ~ d23 * 1 + g23 * grp2
+# i2i4 ~ d24 * 1 + g24 * grp2
+# i3i4 ~ d34 * 1 + g34 * grp2
+
 reg2 <- '
+  i1 ~ mu1 * 1 + g11 * grp2
+  i2 ~ mu2 * 1 + g21 * grp2
+  i3 ~ mu3 * 1 + g31 * grp2
   i4 ~ 0 * 1 + mu4 * 1
-  i1i2 ~ d12 * 1 + g12 * grp
-  i1i3 ~ d13 * 1 + g13 * grp
-  i1i4 ~ d14 * 1 + g14 * grp
-  i2i3 ~ d23 * 1 + g23 * grp
-  i2i4 ~ d24 * 1 + g24 * grp
-  i3i4 ~ d34 * 1 + g34 * grp
 '
 
 # fix the factor loadings as pairwise differences
@@ -84,29 +90,39 @@ covars2 <- '
   i3i4 ~~ 2 * i3i4
 '
 
+
+
 derived2 <- '
-  mu11 := sqrt(2) * d14
-  mu21 := sqrt(2) * d24
-  mu31 := sqrt(2) * d34
-  b1 := sqrt(2) * g14
-  b2 := sqrt(2) * g24
-  b3 := sqrt(2) * g34
-  mu12 := sqrt(2) * (d14 + g14)
-  mu22 := sqrt(2) * (d24 + g24)
-  mu32 := sqrt(2) * (d34 + g34)
+  mu11 := sqrt(2) * mu1
+  mu21 := sqrt(2) * mu2
+  mu31 := sqrt(2) * mu3
+  mu12 := sqrt(2) * mu1 + g11
+  mu22 := sqrt(2) * mu2 + g21
+  mu32 := sqrt(2) * mu3 + g31
 '
 
 # fit the model
 mfit2 <- lavaan(
   model = c(reg2, meas2, covars2, derived2),
-  data = pairs_dat3,
+  data = pairs_dat2,
   ordered = names(pairs_dat2)[1:6],
   parameterization = "theta",
   meanstructure = TRUE,
   orthogonal = T,
   std.lv = T
 )
-lavaan::summary(mfit2)
+lavaan::summary(mfit2, standardized = F)
 
+colMeans(pairs_dat2[1:surveys/2, 1:6])
+
+pnorm(coef(mfit2))
+
+
+colMeans(pairs_dat2[(surveys/2 + 1):surveys, 1:6])
+pnorm(coef(mfit2)[which(1:12 %% 2 == 0)] +
+        coef(mfit2)[which(1:12 %% 2 == 1)])
+
+
+coef(mfit2)
 
 
