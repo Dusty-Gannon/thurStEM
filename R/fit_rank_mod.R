@@ -68,19 +68,19 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
     reg_mod <- paste(reg_mod, collapse = "\n")
   } else{
     X_names <- colnames(X)[-1]
-    reg_mod <- vector("character", length = K + length(X_names))
+    reg_mod <- vector("character", length = K + length(X_names) - 1)
     counter <- 1
     for(i in 1:(K - 1)){
       intercept_i <- paste0("i", i, " ~ mu", i, " * 1")
         reg_ij <- ""
         for(j in 1:(ncol(X) - 1)){
-          reg_ij <- paste0(reg_ij, " + b", i, j, " * ", X_names[l])
+          reg_ij <- paste0(reg_ij, " + b", i, j, " * ", X_names[j])
         }
         reg_mod[counter] <- paste0(intercept_i, reg_ij)
         counter <- counter + 1
-      }
+    }
+    reg_mod[length(reg_mod)] <- paste0("i", K, " ~ 0 * 1 + mu", K, " * 1")
   }
-  ## NEEDS WORK!!!
   reg_mod <- paste(reg_mod, collapse = "\n")
 
 
@@ -119,14 +119,6 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
     # now find unique combinations of those along with medians of the continuous
     # variables
     X_new <- X
-    # make some rownames to track things
-    rnames <- apply(
-      X_new[, fctrs],
-      1,
-      function(x, n = colnames(X_new[, fctrs])){
-        paste(rep(n, x), collapse = "_")
-      }
-    ) |> unique() |> gsub("[()]", "", x = _, perl = T)
 
     if(any(!(1:ncol(X) %in% fctrs))){
       contins <- which(!(1:ncol(X) %in% fctrs))
@@ -134,8 +126,18 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
     }
     X_new <- unique(X_new)
 
+    # make some rownames to track things
+    rnames <- apply(
+      X_new[, fctrs],
+      1,
+      function(x, n = colnames(X)[fctrs]){
+        paste(rep(n, x), collapse = "_")
+      }
+    ) |> gsub("[()]", "", x = _, perl = T)
+
     # now construct derived variables
     derived <- vector("character", length = (K - 1) * nrow(X_new))
+    ### NEEDS WORK!!!
     for(i in 1:nrow(X_new)){
       for(k in 1:(K - 1)){
         intercept_ik <- paste0(
