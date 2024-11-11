@@ -26,3 +26,33 @@
 summary.thurstem <- function(model_obj){
   lavaan::summary(model_obj$mfit)
 }
+
+
+residuals.thurstem <- function(model_obj, type = "cor"){
+  lavaan::resid(model_obj$mfit, type = type)
+}
+
+
+
+
+#' Get different measures of SEM fit
+#'
+#' @param model_obj Fitted `thurstem` model object.
+#' @param ... Extra arguments to be pass on to \code{\link[lavaan]{fitMeasures}} from
+#' \pkg{lavaan}.
+#'
+#' @return A `lavaan`-esque summary of the various SEM fit measures.
+#' See \code{\link[lavaan]{fitMeasures}}.
+#'
+#' @importFrom lavaan fitMeasures
+#'
+#' @export
+#'
+fit_measures <- function(model_obj, ...){
+  all_args <- c(
+    list(object = model_obj$mfit),
+    ...
+  )
+  do.call(lavaan::fitMeasures, all_args)
+}
+

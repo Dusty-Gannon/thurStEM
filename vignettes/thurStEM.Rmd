@@ -1,0 +1,109 @@
+---
+title: "Getting started with thurStEM"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with thurStEM}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+Package `thurStEM` is meant to help users fit Thurstone models to ranking data when users have groups or covariates of interest. `thurStEM` uses [`lavaan`](https://lavaan.ugent.be/) as the computational engine, but smooths over the relatively complex process of specifying Thurstonian ranking models as structural equation models (SEMs). This vignette will introduce the main functions and general workflow for using the package.
+
+> **Note**: As of `r Sys.Date()`, the package can only fit *Thurstone Case V* models. Case I and Case III models are still in the works.
+
+## Some example data
+
+First, let's simulate some example data to give an idea of the type of data `thurStEM` can help a user analyze. We will simulate answers to a single survey question, one in which the users are asked to rank 5 ice cream flavors in terms of preference: vanilla, chocolate, strawberry, banana, and raspberry. Assume the experiment was designed to address the question of whether students at Calvin Hobbes University who identify as men and those who identify as women have different ice cream preferences, and whether their is a shift in preferences that is correlated with the weather (I know, it's a silly example). So, surveyors asked respondents in the Spaceman Spiff Quad to rank the icecream flavors, being sure to administer surveys on two cloudy, cool days and on two warm, sunny days. We assume there is no change in underlying mean utilities (the latent distributions of preferences for each flavor) for the different groups across days with the same weather.
+
+```{r}
+set.seed(2618)
+flvrs <- c("vanilla", "chocolate", "strawberry", "banana", "raspberry")
+
+# store number of items to rank
+K <- length(flvrs)
+
+women_sun <- c(-3, 1, 0, -3, 0.5)
+women_cloud <- c(-3, 1, 0, -3, 0.5)
+men_sun <- c(-2, 0, 0, -2.5, 0.5)
+men_cloud <- c(-3, 1, -1, -3, 0)
+
+# total surveys
+surveys <- 400
+
+# create the data
+ranks <- matrix(nrow = surveys, ncol = K)
+
+for(i in 1:surveys){
+  if(i <= surveys/4){
+    ranks[i, ] <- rnorm(K, women_sun) |> 
+      order()
+  } else if(i <= 2 * surveys/4){
+    ranks[i, ] <- rnorm(K, women_cloud) |> 
+      order()
+  } else if(i <= 3 * surveys/4){
+    ranks[i, ] <- rnorm(K, men_sun) |>
+      order()
+  } else{
+    ranks[i, ] <- rnorm(K, men_cloud) |>
+      order()
+  }
+}
+
+# convert to a dataframe
+ranks <- as.data.frame(ranks)
+
+# add flavor names
+names(ranks) <- flvrs
+
+# add covariate columns
+ranks$gender <- rep(c("f", "m"), each = surveys/2) |>
+  factor()
+ranks$weather <- rep(c("warm", "cool"), each = surveys/4) |>
+  rep(2) |>
+  factor()
+
+str(ranks)
+
+```
+
+The next step for fitting a Thurstonian ranking model is to convert the ranks into pairwise indicator variables. That is, for respondent $i = 1,2,...,N$, we compare the ranks given to items $j$ and $k$, and give comparison $\{j,k\}$ a 1 if item $j$ was ranked before (that is, *higher* in terms of preference), and 0 otherwise. We do this for each $M = {K\choose 2}$ pairwise comparisons, where $K$ is the number of items respondents are ranking. To make this data conversion, we will use the `ranks_as_pairs()` function from `thurStEM`.
+
+```{r setup}
+library(thurStEM)
+
+pairs_dat <- ranks_as_pairs(ranks, cols = 1:5)
+
+str(pairs_dat)
+```
+
+This function takes multiple arguments, including the ranks data as well as the columns in the ranks data that store the columns. We can specify the ranks columns using their indices or their names.
+
+Switching the `agg` flag may be applicable if there are no groups or covariates since the function simply computes the proportion of times item $j$ is ranked before item $k$ over the whole dataset when `agg = TRUE`. When `scores = TRUE`, then the ranks in `R` are considered to be *scores* instead of *ranks*, in which case a 1 is considered least preferable.
+
+## Fitting a Thurstone Case V model
+
+The syntax for fitting the model takes a one-sided equation for any covariates or groups the user wants to use, while the rest is specified in a similar fashion to the `ranks_as_pairs()` function. For example:
+
+```{r}
+mfit <- fit_rank_mod(
+  data = pairs_dat,
+  pairs_cols = 1:choose(5, 2),
+  form = ~ gender * weather,
+  mclass = "V"
+)
+
+summary(mfit)
+```
+
+
+
+
+

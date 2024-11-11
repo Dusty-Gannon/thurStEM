@@ -10,7 +10,7 @@ fit_rank_mod(data, pairs_cols = NULL, form = NULL, mclass = "V")
 \item{data}{A data frame containing the pairs data and any covariates.}
 
 \item{pairs_cols}{A vector of column indices or names specifying the pairwise comparison columns in the data.
-If \code{NULL}, all columns are used.}
+If \code{NULL}, all columns are assumed to be ranks or scores.}
 
 \item{form}{An optional formula specifying the covariates to include in the model. If \code{NULL}, then the
 \emph{intercept only} model will be fitted.}
@@ -20,7 +20,7 @@ If \code{NULL}, all columns are used.}
 \value{
 A list of class \code{"thurstem"} containing:
 \item{mfit}{The fitted lavaan model object.}
-\item{df_pvals}{A data frame of chi-square test statistics, degrees of freedom, and p-values for each covariate.}
+\item{emm_grid}{The model matrix for constructing the marginal means.}
 \item{mclass}{The specified Thurstone model class.}
 }
 \description{

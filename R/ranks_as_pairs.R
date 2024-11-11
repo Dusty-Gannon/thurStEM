@@ -79,7 +79,7 @@ ranks_as_pairs <- function(R, cols = NULL, agg = F, scores = F){
     if(is.null(cols)){
       return(as.data.frame(P))
     } else{
-      return(as.data.frame(P, R[-cols]))
+      return(as.data.frame(cbind(P, R[-cols])))
     }
   }
 }

@@ -1,5 +1,5 @@
 Package: thurStEM
-Title: Fitting Thurstone models using SEM
+Title: Fitting Thurstone models using SEMs
 Version: 0.0.0.9000
 Authors@R: 
     person("Dustin", "Gannon", , "dustin.gannon@oregonstate.edu", role = c("aut", "cre"),
@@ -11,3 +11,7 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Imports:
   lavaan
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr

@@ -14,7 +14,7 @@
 #'
 #' @return A list of class \code{"thurstem"} containing:
 #'   \item{mfit}{The fitted lavaan model object.}
-#'   \item{df_pvals}{A data frame of chi-square test statistics, degrees of freedom, and p-values for each covariate.}
+#'   \item{emm_grid}{The model matrix for constructing the marginal means.}
 #'   \item{mclass}{The specified Thurstone model class.}
 #'
 #'
@@ -92,30 +92,53 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
   }
   meas <- paste(meas, collapse = "\n")
 
+
   # now fix factor variances and covariances
+  Sigma_t <- diag(1, K)
+  Sigma_d <- A %*% Sigma_t %*% t(A)
   covar <- vector("character", length = K + m)
   for(i in 1:K){
-    covar[i] <- paste0("i", i, " ~~ 1 * i", i)
+    lhs_i <- paste0("i", i, " ~~ ", Sigma_t[i, 1], " * i1")
+    rhs_i <- ""
+    if(i > 1){
+      for(j in 2:i){
+        rhs_i <- paste(rhs_i, paste0(Sigma_t[i,j], " * i", j), sep = " + ")
+      }
+    }
+    covar[i] <- paste0(lhs_i, rhs_i)
   }
   for(i in (K + 1):length(covar)){
-    covar[i] <- paste0(indic[i - K], " ~~ 2 * ", indic[i - K])
+    lhs_i <- paste0(indic[i - K], " ~~ ", Sigma_d[(i - K), 1], " * ", indic[1])
+    rhs_i <- ""
+    if(i > (K + 1)){
+      for(j in 2:(i - K)){
+        rhs_i <- paste(rhs_i, paste0(Sigma_d[(i - K), j], " * ", indic[j]), sep = " + ")
+      }
+    }
+    covar[i] <- paste0(lhs_i, rhs_i)
   }
   covar <- paste(covar, collapse = "\n")
 
+
   # now create the derived portion of the model
+  # get the names of the factors
+  fctrs_dat <- lapply(data, is.factor) |> unlist()
+  fctrs_dat <- names(fctrs_dat)[fctrs_dat]
   if(is.null(form)){
+    X_new <- matrix(1, nrow = 1, ncol = 1)
     derived <- vector("character", length = K)
     for(i in 1:(K - 1)){
       derived[i] <- paste0("mu", i, " := sqrt(2) * d", i, K)
     }
     derived[K] <- paste0("mu", K, " := 0")
-  } else{
+  } else if(length(fctrs_dat) > 0){
     # first, find which columns of X are factors
     fctrs <- c(
       1,
       apply(as.matrix(X[,-1]), 2, function(x){!any(x != 1 & x != 0)}) |>
         which() + 1
     )
+
     # now find unique combinations of those along with medians of the continuous
     # variables
     X_new <- X
@@ -127,30 +150,35 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
     X_new <- unique(X_new)
 
     # make some rownames to track things
-    rnames <- apply(
-      X_new[, fctrs],
-      1,
-      function(x, n = colnames(X)[fctrs]){
-        paste(rep(n, x), collapse = "_")
+    data_grps <- as.data.frame(unique(data[, fctrs_dat]))
+    names(data_grps) <- fctrs_dat
+    rnames <- vector("character", nrow(data_grps))
+    for(i in 1:nrow(data_grps)){
+      rname_i <- vector("character", length = length(fctrs_dat))
+      for(j in 1:length(fctrs_dat)){
+        rname_i[j] <- paste0(fctrs_dat[j], data_grps[i, j])
       }
-    ) |> gsub("[()]", "", x = _, perl = T)
+      rnames[i] <- paste(rname_i, collapse = "_")
+    }
 
     # now construct derived variables
     derived <- vector("character", length = (K - 1) * nrow(X_new))
-    ### NEEDS WORK!!!
+
     for(i in 1:nrow(X_new)){
       for(k in 1:(K - 1)){
         intercept_ik <- paste0(
-          rnames[i], "_mu", k, " := sqrt(2) * (d", k, "4"
+          rnames[i], "_mu", k, " := sqrt(2) * mu", k
         )
         rhs_ik <- ""
         for(l in 1:(ncol(X) - 1)){
-          rhs_ik <- paste0(rhs_ik, " + ", X_new[i, (l + 1)], " * b", k, "4", l)
+          rhs_ik <- paste0(rhs_ik, " + ", X_new[i, (l + 1)], " * b", k, l)
         }
-        rhs_ik <- paste0(rhs_ik, ")")
         derived[(K-1)*(i - 1) + k] <- paste0(intercept_ik, rhs_ik)
       }
     }
+  } else {
+    X_new <- NULL
+    derived <- ""
   }
   derived <- paste(derived, collapse = "\n")
 
@@ -168,14 +196,20 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
     data = lav_dat,
     ordered = names(lav_dat)[1:ncol(P)],
     parameterization = "theta",
-    meanstructure = TRUE,
-    orthogonal = TRUE,
-    std.lv = TRUE
+    meanstructure = TRUE
   )
 
   ret <- list(
     mfit = mfit,
-    mclass = mclass
+    emm_grid = X_new,
+    mclass = mclass,
+    model = list(
+      model_code = c(reg_mod, meas, covar, derived),
+      Sigma_t = Sigma_t,
+      Sigma_d = Sigma_d,
+      A = A
+    ),
+    K = K, m = m
   )
 
   class(ret) <- "thurstem"
@@ -183,3 +217,5 @@ fit_rank_mod <- function(data, pairs_cols = NULL, form = NULL, mclass = "V"){
   return(ret)
 
 }
+
+

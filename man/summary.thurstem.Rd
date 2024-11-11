@@ -10,12 +10,12 @@
 \item{model_obj}{A fitted \code{thurstem} object.}
 }
 \value{
-\code{lavaan}-esque summary, including sections for
+\code{lavaan}-esque summary, including sections for:
 \itemize{
-\item A summary of model fitting procedures and model fit
-\item A summary of the latent variables and the factor loadings
+\item A summary of model fitting procedures and model fit.
+\item A summary of the latent variables and the factor loadings.
 \item A summary of the regression component of the model, modeling
-the intercepts of the latent variables
+the intercepts of the latent variables.
 \item A summary of the threshold parameters, for which \eqn{1 - \Phi(\tau_\ell)},
 where \eqn{\Phi()} is the standard normal CDF, gives the estimated probability
 of comparison \eqn{\ell}, that is, item \eqn{i} ranked ahead of item \eqn{j}.

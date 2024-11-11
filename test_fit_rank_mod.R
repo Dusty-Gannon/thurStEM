@@ -27,7 +27,7 @@ summary(test)
 
 mu1 <- c(-3, -2, -1, 0)
 mu2 <- c(-3, -2.5, -0.5, 0)
-surveys <- 10000
+surveys <- 1000
 
 ranks2 <- matrix(nrow = surveys, ncol = length(mu1))
 
